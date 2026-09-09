@@ -62,12 +62,16 @@ jobs:
           ref: ${{ inputs.source_ref }}
           path: wallpaper-source
 
-      - name: Validate desktop icon
+      - name: Validate desktop assets
         shell: bash
         run: |
           set -euo pipefail
           test -f "wallpaper-source/public/apple-touch-icon.png" || {
             echo "Missing wallpaper-source/public/apple-touch-icon.png"
+            exit 1
+          }
+          test -f "wallpaper-source/public/pake-auth-navigation.js" || {
+            echo "Missing wallpaper-source/public/pake-auth-navigation.js"
             exit 1
           }
 
@@ -93,6 +97,7 @@ jobs:
           node dist/cli.js "${{ inputs.url }}" \
             --name "Wallpaper Gallery" \
             --icon "wallpaper-source/public/apple-touch-icon.png" \
+            --inject "wallpaper-source/public/pake-auth-navigation.js" \
             --width "${{ inputs.width }}" \
             --height "${{ inputs.height }}" \
             --targets deb,appimage
@@ -127,6 +132,7 @@ jobs:
           node dist/cli.js "${{ inputs.url }}" \
             --name "Wallpaper Gallery" \
             --icon "wallpaper-source/public/apple-touch-icon.png" \
+            --inject "wallpaper-source/public/pake-auth-navigation.js" \
             --width "${{ inputs.width }}" \
             --height "${{ inputs.height }}" \
             --multi-arch
@@ -151,6 +157,7 @@ jobs:
           node dist/cli.js "${{ inputs.url }}" `
             --name "Wallpaper Gallery" `
             --icon "wallpaper-source/public/apple-touch-icon.png" `
+            --inject "wallpaper-source/public/pake-auth-navigation.js" `
             --width "${{ inputs.width }}" `
             --height "${{ inputs.height }}"
 

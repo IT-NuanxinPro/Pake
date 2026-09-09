@@ -66,8 +66,8 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          test -f "wallpaper-source/public/apple-touch-icon.png" || {
-            echo "Missing wallpaper-source/public/apple-touch-icon.png"
+          test -f "wallpaper-source/public/favicon.svg" || {
+            echo "Missing wallpaper-source/public/favicon.svg"
             exit 1
           }
           test -f "wallpaper-source/public/pake-auth-navigation.js" || {
@@ -96,7 +96,7 @@ jobs:
 
           node dist/cli.js "${{ inputs.url }}" \
             --name "Wallpaper Gallery" \
-            --icon "wallpaper-source/public/apple-touch-icon.png" \
+            --icon "wallpaper-source/public/favicon.svg" \
             --inject "wallpaper-source/public/pake-auth-navigation.js" \
             --width "${{ inputs.width }}" \
             --height "${{ inputs.height }}" \
@@ -131,7 +131,7 @@ jobs:
 
           node dist/cli.js "${{ inputs.url }}" \
             --name "Wallpaper Gallery" \
-            --icon "wallpaper-source/public/apple-touch-icon.png" \
+            --icon "wallpaper-source/public/favicon.svg" \
             --inject "wallpaper-source/public/pake-auth-navigation.js" \
             --width "${{ inputs.width }}" \
             --height "${{ inputs.height }}" \
@@ -156,7 +156,7 @@ jobs:
 
           node dist/cli.js "${{ inputs.url }}" `
             --name "Wallpaper Gallery" `
-            --icon "wallpaper-source/public/apple-touch-icon.png" `
+            --icon "wallpaper-source/public/favicon.svg" `
             --inject "wallpaper-source/public/pake-auth-navigation.js" `
             --width "${{ inputs.width }}" `
             --height "${{ inputs.height }}"

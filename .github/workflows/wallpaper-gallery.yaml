@@ -4,13 +4,19 @@ on:
   workflow_call:
     inputs:
       source_repository:
-        description: "Repository that owns the Wallpaper Gallery release"
+        description: "Repository that owns the Wallpaper Gallery desktop release"
         required: true
         type: string
+      source_ref:
+        description: "Wallpaper Gallery source ref used for desktop assets such as the icon"
+        required: false
+        type: string
+        default: "main"
       release_tag:
-        description: "Wallpaper Gallery release tag, for example v4.0.3"
-        required: true
+        description: "Stable Wallpaper Gallery desktop release tag"
+        required: false
         type: string
+        default: "desktop"
       url:
         description: "Wallpaper Gallery URL"
         required: false
@@ -49,39 +55,21 @@ jobs:
           repository: IT-NuanxinPro/Pake
           ref: main
 
-      - name: Checkout Wallpaper Gallery release source
+      - name: Checkout Wallpaper Gallery source
         uses: actions/checkout@v6
         with:
           repository: ${{ inputs.source_repository }}
-          ref: ${{ inputs.release_tag }}
+          ref: ${{ inputs.source_ref }}
           path: wallpaper-source
 
-      - name: Validate release version and icon
+      - name: Validate desktop icon
         shell: bash
         run: |
           set -euo pipefail
-
-          TAG="${{ inputs.release_tag }}"
-          VERSION="${TAG#v}"
-          PACKAGE_VERSION="$(node -p "require('./wallpaper-source/package.json').version")"
-
-          if [ "$TAG" = "$VERSION" ]; then
-            echo "Release tag must start with v: $TAG"
-            exit 1
-          fi
-
-          if [ "$VERSION" != "$PACKAGE_VERSION" ]; then
-            echo "Version mismatch: tag=$VERSION package.json=$PACKAGE_VERSION"
-            exit 1
-          fi
-
-          if [ ! -f "wallpaper-source/public/apple-touch-icon.png" ]; then
+          test -f "wallpaper-source/public/apple-touch-icon.png" || {
             echo "Missing wallpaper-source/public/apple-touch-icon.png"
             exit 1
-          fi
-
-          echo "APP_VERSION=$VERSION" >> "$GITHUB_ENV"
-          echo "Using Wallpaper Gallery version $VERSION"
+          }
 
       - name: Setup build environment
         uses: ./.github/actions/setup-env
@@ -107,7 +95,6 @@ jobs:
             --icon "wallpaper-source/public/apple-touch-icon.png" \
             --width "${{ inputs.width }}" \
             --height "${{ inputs.height }}" \
-            --app-version "$APP_VERSION" \
             --targets deb,appimage
 
           mkdir -p output/linux
@@ -125,8 +112,8 @@ jobs:
           test -n "$DEB" || { echo "No DEB package found"; exit 1; }
           test -n "$APPIMAGE" || { echo "No AppImage package found"; exit 1; }
 
-          mv "$DEB" "output/linux/Wallpaper-Gallery-${APP_VERSION}-linux-x86_64.deb"
-          mv "$APPIMAGE" "output/linux/Wallpaper-Gallery-${APP_VERSION}-linux-x86_64.AppImage"
+          mv "$DEB" "output/linux/Wallpaper-Gallery-linux-x86_64.deb"
+          mv "$APPIMAGE" "output/linux/Wallpaper-Gallery-linux-x86_64.AppImage"
 
       - name: Build macOS package
         if: runner.os == 'macOS'
@@ -142,7 +129,6 @@ jobs:
             --icon "wallpaper-source/public/apple-touch-icon.png" \
             --width "${{ inputs.width }}" \
             --height "${{ inputs.height }}" \
-            --app-version "$APP_VERSION" \
             --multi-arch
 
           mkdir -p output/macos
@@ -153,7 +139,7 @@ jobs:
           fi
 
           test -n "$DMG" || { echo "No DMG package found"; exit 1; }
-          mv "$DMG" "output/macos/Wallpaper-Gallery-${APP_VERSION}-macOS-universal.dmg"
+          mv "$DMG" "output/macos/Wallpaper-Gallery-macOS-universal.dmg"
 
       - name: Build Windows package
         if: runner.os == 'Windows'
@@ -166,8 +152,7 @@ jobs:
             --name "Wallpaper Gallery" `
             --icon "wallpaper-source/public/apple-touch-icon.png" `
             --width "${{ inputs.width }}" `
-            --height "${{ inputs.height }}" `
-            --app-version "$env:APP_VERSION"
+            --height "${{ inputs.height }}"
 
           New-Item -Path "output/windows" -ItemType Directory -Force | Out-Null
 
@@ -180,48 +165,50 @@ jobs:
             throw "No MSI package found"
           }
 
-          Move-Item $msi.FullName "output/windows/Wallpaper-Gallery-$env:APP_VERSION-Windows-x64.msi"
+          Move-Item $msi.FullName "output/windows/Wallpaper-Gallery-Windows-x64.msi"
 
       - name: Upload build artifact
         uses: actions/upload-artifact@v6
         with:
-          name: Wallpaper-Gallery-${{ inputs.release_tag }}-${{ matrix.build }}
+          name: Wallpaper-Gallery-${{ matrix.build }}
           path: output/**/*
           if-no-files-found: error
           retention-days: 7
 
-      - name: Upload Linux assets to Wallpaper Gallery release
-        if: runner.os == 'Linux'
-        uses: ncipollo/release-action@v1
-        with:
-          tag: ${{ inputs.release_tag }}
-          allowUpdates: true
-          omitBody: true
-          omitName: true
-          replacesArtifacts: true
-          artifacts: "output/linux/*.deb,output/linux/*.AppImage"
-          token: ${{ github.token }}
+  release:
+    name: Update stable desktop release
+    needs: build
+    runs-on: ubuntu-latest
 
-      - name: Upload macOS asset to Wallpaper Gallery release
-        if: runner.os == 'macOS'
-        uses: ncipollo/release-action@v1
+    steps:
+      - name: Download desktop artifacts
+        uses: actions/download-artifact@v6
         with:
-          tag: ${{ inputs.release_tag }}
-          allowUpdates: true
-          omitBody: true
-          omitName: true
-          replacesArtifacts: true
-          artifacts: "output/macos/*.dmg"
-          token: ${{ github.token }}
+          pattern: Wallpaper-Gallery-*
+          path: release
+          merge-multiple: true
 
-      - name: Upload Windows asset to Wallpaper Gallery release
-        if: runner.os == 'Windows'
-        uses: ncipollo/release-action@v1
-        with:
-          tag: ${{ inputs.release_tag }}
-          allowUpdates: true
-          omitBody: true
-          omitName: true
-          replacesArtifacts: true
-          artifacts: "output/windows/*.msi"
-          token: ${{ github.token }}
+      - name: Publish stable Wallpaper Gallery desktop release
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          SOURCE_REPOSITORY: ${{ inputs.source_repository }}
+          SOURCE_REF: ${{ inputs.source_ref }}
+          RELEASE_TAG: ${{ inputs.release_tag }}
+        run: |
+          set -euo pipefail
+
+          if ! gh release view "$RELEASE_TAG" --repo "$SOURCE_REPOSITORY" >/dev/null 2>&1; then
+            gh release create "$RELEASE_TAG" \
+              --repo "$SOURCE_REPOSITORY" \
+              --target "$SOURCE_REF" \
+              --title "Wallpaper Gallery Desktop" \
+              --notes "Wallpaper Gallery 桌面客户端稳定下载入口。客户端加载线上站点，网站内容更新无需重新安装；仅在桌面壳、图标或原生能力变化时重新构建。"
+          fi
+
+          mapfile -t ASSETS < <(find release -type f -print | sort)
+          test "${#ASSETS[@]}" -gt 0 || { echo "No desktop assets found"; exit 1; }
+
+          gh release upload "$RELEASE_TAG" "${ASSETS[@]}" \
+            --repo "$SOURCE_REPOSITORY" \
+            --clobber

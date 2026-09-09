@@ -1,0 +1,229 @@
+name: Build Wallpaper Gallery Desktop
+
+on:
+  workflow_call:
+    inputs:
+      source_repository:
+        description: "Repository that owns the Wallpaper Gallery release"
+        required: true
+        type: string
+      release_tag:
+        description: "Wallpaper Gallery release tag, for example v4.0.3"
+        required: true
+        type: string
+      url:
+        description: "Wallpaper Gallery URL"
+        required: false
+        type: string
+        default: "https://wallpaper.061129.xyz/"
+      width:
+        description: "Initial window width"
+        required: false
+        type: number
+        default: 1600
+      height:
+        description: "Initial window height"
+        required: false
+        type: number
+        default: 900
+
+jobs:
+  build:
+    name: Wallpaper Gallery (${{ matrix.build }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - build: linux
+            os: ubuntu-latest
+          - build: macos
+            os: macos-latest
+          - build: windows
+            os: windows-latest
+
+    steps:
+      - name: Checkout Pake
+        uses: actions/checkout@v6
+        with:
+          repository: IT-NuanxinPro/Pake
+          ref: main
+
+      - name: Checkout Wallpaper Gallery release source
+        uses: actions/checkout@v6
+        with:
+          repository: ${{ inputs.source_repository }}
+          ref: ${{ inputs.release_tag }}
+          path: wallpaper-source
+
+      - name: Validate release version and icon
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          TAG="${{ inputs.release_tag }}"
+          VERSION="${TAG#v}"
+          PACKAGE_VERSION="$(node -p "require('./wallpaper-source/package.json').version")"
+
+          if [ "$TAG" = "$VERSION" ]; then
+            echo "Release tag must start with v: $TAG"
+            exit 1
+          fi
+
+          if [ "$VERSION" != "$PACKAGE_VERSION" ]; then
+            echo "Version mismatch: tag=$VERSION package.json=$PACKAGE_VERSION"
+            exit 1
+          fi
+
+          if [ ! -f "wallpaper-source/public/apple-touch-icon.png" ]; then
+            echo "Missing wallpaper-source/public/apple-touch-icon.png"
+            exit 1
+          fi
+
+          echo "APP_VERSION=$VERSION" >> "$GITHUB_ENV"
+          echo "Using Wallpaper Gallery version $VERSION"
+
+      - name: Setup build environment
+        uses: ./.github/actions/setup-env
+        with:
+          mode: build
+
+      - name: Build Pake CLI
+        run: pnpm run cli:build
+
+      - name: Setup mold linker
+        if: runner.os == 'Linux'
+        uses: rui314/setup-mold@v1
+
+      - name: Build Linux packages
+        if: runner.os == 'Linux'
+        shell: bash
+        timeout-minutes: 25
+        run: |
+          set -euo pipefail
+
+          node dist/cli.js "${{ inputs.url }}" \
+            --name "Wallpaper Gallery" \
+            --icon "wallpaper-source/public/apple-touch-icon.png" \
+            --width "${{ inputs.width }}" \
+            --height "${{ inputs.height }}" \
+            --app-version "$APP_VERSION" \
+            --targets deb,appimage
+
+          mkdir -p output/linux
+
+          DEB="$(find . -maxdepth 1 -type f -name '*.deb' -print -quit)"
+          if [ -z "$DEB" ]; then
+            DEB="$(find src-tauri/target -type f -path '*/bundle/deb/*.deb' -print -quit)"
+          fi
+
+          APPIMAGE="$(find . -maxdepth 1 -type f -name '*.AppImage' -print -quit)"
+          if [ -z "$APPIMAGE" ]; then
+            APPIMAGE="$(find src-tauri/target -type f -path '*/bundle/appimage/*.AppImage' -print -quit)"
+          fi
+
+          test -n "$DEB" || { echo "No DEB package found"; exit 1; }
+          test -n "$APPIMAGE" || { echo "No AppImage package found"; exit 1; }
+
+          mv "$DEB" "output/linux/Wallpaper-Gallery-${APP_VERSION}-linux-x86_64.deb"
+          mv "$APPIMAGE" "output/linux/Wallpaper-Gallery-${APP_VERSION}-linux-x86_64.AppImage"
+
+      - name: Build macOS package
+        if: runner.os == 'macOS'
+        shell: bash
+        timeout-minutes: 30
+        env:
+          TAURI_BUNDLER_DMG_IGNORE_CI: "true"
+        run: |
+          set -euo pipefail
+
+          node dist/cli.js "${{ inputs.url }}" \
+            --name "Wallpaper Gallery" \
+            --icon "wallpaper-source/public/apple-touch-icon.png" \
+            --width "${{ inputs.width }}" \
+            --height "${{ inputs.height }}" \
+            --app-version "$APP_VERSION" \
+            --targets universal \
+            --multi-arch
+
+          mkdir -p output/macos
+
+          DMG="$(find . -maxdepth 1 -type f -name '*.dmg' -print -quit)"
+          if [ -z "$DMG" ]; then
+            DMG="$(find src-tauri/target -type f -path '*/bundle/dmg/*.dmg' -print -quit)"
+          fi
+
+          test -n "$DMG" || { echo "No DMG package found"; exit 1; }
+          mv "$DMG" "output/macos/Wallpaper-Gallery-${APP_VERSION}-macOS-universal.dmg"
+
+      - name: Build Windows package
+        if: runner.os == 'Windows'
+        shell: pwsh
+        timeout-minutes: 25
+        run: |
+          $ErrorActionPreference = "Stop"
+
+          node dist/cli.js "${{ inputs.url }}" `
+            --name "Wallpaper Gallery" `
+            --icon "wallpaper-source/public/apple-touch-icon.png" `
+            --width "${{ inputs.width }}" `
+            --height "${{ inputs.height }}" `
+            --app-version "$env:APP_VERSION" `
+            --targets x64
+
+          New-Item -Path "output/windows" -ItemType Directory -Force | Out-Null
+
+          $msi = Get-ChildItem -Path . -Filter "*.msi" -File | Select-Object -First 1
+          if (-not $msi) {
+            $msi = Get-ChildItem -Path "src-tauri/target" -Recurse -Filter "*.msi" -File | Select-Object -First 1
+          }
+
+          if (-not $msi) {
+            throw "No MSI package found"
+          }
+
+          Move-Item $msi.FullName "output/windows/Wallpaper-Gallery-$env:APP_VERSION-Windows-x64.msi"
+
+      - name: Upload build artifact
+        uses: actions/upload-artifact@v6
+        with:
+          name: Wallpaper-Gallery-${{ inputs.release_tag }}-${{ matrix.build }}
+          path: output/**/*
+          if-no-files-found: error
+          retention-days: 7
+
+      - name: Upload Linux assets to Wallpaper Gallery release
+        if: runner.os == 'Linux'
+        uses: ncipollo/release-action@v1
+        with:
+          tag: ${{ inputs.release_tag }}
+          allowUpdates: true
+          omitBody: true
+          omitName: true
+          replacesArtifacts: true
+          artifacts: "output/linux/*.deb,output/linux/*.AppImage"
+          token: ${{ github.token }}
+
+      - name: Upload macOS asset to Wallpaper Gallery release
+        if: runner.os == 'macOS'
+        uses: ncipollo/release-action@v1
+        with:
+          tag: ${{ inputs.release_tag }}
+          allowUpdates: true
+          omitBody: true
+          omitName: true
+          replacesArtifacts: true
+          artifacts: "output/macos/*.dmg"
+          token: ${{ github.token }}
+
+      - name: Upload Windows asset to Wallpaper Gallery release
+        if: runner.os == 'Windows'
+        uses: ncipollo/release-action@v1
+        with:
+          tag: ${{ inputs.release_tag }}
+          allowUpdates: true
+          omitBody: true
+          omitName: true
+          replacesArtifacts: true
+          artifacts: "output/windows/*.msi"
+          token: ${{ github.token }}

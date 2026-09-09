@@ -143,7 +143,6 @@ jobs:
             --width "${{ inputs.width }}" \
             --height "${{ inputs.height }}" \
             --app-version "$APP_VERSION" \
-            --targets universal \
             --multi-arch
 
           mkdir -p output/macos
@@ -168,8 +167,7 @@ jobs:
             --icon "wallpaper-source/public/apple-touch-icon.png" `
             --width "${{ inputs.width }}" `
             --height "${{ inputs.height }}" `
-            --app-version "$env:APP_VERSION" `
-            --targets x64
+            --app-version "$env:APP_VERSION"
 
           New-Item -Path "output/windows" -ItemType Directory -Force | Out-Null
 

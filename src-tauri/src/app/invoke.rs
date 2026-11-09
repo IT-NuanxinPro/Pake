@@ -219,15 +219,18 @@ pub fn set_dock_badge_label(app: AppHandle, label: Option<String>) -> Result<(),
 }
 
 #[command]
-pub async fn update_theme_mode(app: AppHandle, mode: String) {
-    let theme = if mode == "dark" {
-        Theme::Dark
-    } else {
-        Theme::Light
+pub async fn update_theme_mode(app: AppHandle, mode: String) -> Result<(), String> {
+    let theme = match mode.as_str() {
+        "dark" => Some(Theme::Dark),
+        "light" => Some(Theme::Light),
+        // Clear the explicit override so Windows/WebView2 can follow OS changes.
+        "system" => None,
+        _ => return Err("Unsupported theme mode".into()),
     };
     for window in app.webview_windows().values() {
-        let _ = window.set_theme(Some(theme));
+        window.set_theme(theme).map_err(|error| error.to_string())?;
     }
+    Ok(())
 }
 
 // Apply native WebView zoom (WKWebView pageZoom / WebView2 ZoomFactor / WebKitGTK

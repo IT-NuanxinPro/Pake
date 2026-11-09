@@ -1,4 +1,5 @@
 document.addEventListener("DOMContentLoaded", () => {
+  let lastMode = null;
   const debounce = (func, wait) => {
     let timeout;
     return (...args) => {
@@ -11,6 +12,8 @@ document.addEventListener("DOMContentLoaded", () => {
     const doc = document.documentElement;
     const body = document.body;
     let mode = null;
+    // A resolved DOM color is not a manual override when the site follows the OS.
+    const preference = doc.getAttribute("data-theme-mode");
 
     // Check for explicit theme classes or attributes
     const isDark =
@@ -27,12 +30,19 @@ document.addEventListener("DOMContentLoaded", () => {
       body.getAttribute("data-theme") === "light" ||
       doc.style.colorScheme === "light";
 
-    if (isDark) mode = "dark";
+    if (preference === "system") mode = "system";
+    else if (isDark) mode = "dark";
     else if (isLight) mode = "light";
 
-    // Only invoke Rust command if an explicit theme override is detected
-    if (mode && window.__TAURI__?.core) {
-      window.__TAURI__.core.invoke("update_theme_mode", { mode });
+    // Sync explicit modes, including clearing the override for system preference
+    if (mode && mode !== lastMode && window.__TAURI__?.core) {
+      lastMode = mode;
+      window.__TAURI__.core
+        .invoke("update_theme_mode", { mode })
+        .catch((error) => {
+          console.warn("[Pake] Failed to synchronize theme:", error);
+          if (lastMode === mode) lastMode = null;
+        });
     }
   };
 
@@ -45,7 +55,7 @@ document.addEventListener("DOMContentLoaded", () => {
   const observer = new MutationObserver(debouncedUpdateTheme);
   const config = {
     attributes: true,
-    attributeFilter: ["class", "data-theme", "style"],
+    attributeFilter: ["class", "data-theme", "data-theme-mode", "style"],
     subtree: false,
   };
 

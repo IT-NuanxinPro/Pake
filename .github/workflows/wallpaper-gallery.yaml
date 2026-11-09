@@ -75,6 +75,11 @@ jobs:
             exit 1
           }
 
+      - name: Resolve application version
+        shell: bash
+        run: |
+          node -e 'const fs = require("node:fs"); const { version } = require("./wallpaper-source/package.json"); if (!/^\d+\.\d+\.\d+$/.test(version)) throw new Error("Invalid application version"); fs.appendFileSync(process.env.GITHUB_ENV, "WALLPAPER_APP_VERSION=" + version + "\n");'
+
       - name: Setup build environment
         uses: ./.github/actions/setup-env
         with:
@@ -96,6 +101,7 @@ jobs:
 
           node dist/cli.js "${{ inputs.url }}" \
             --name "Wallpaper Gallery" \
+            --app-version "$WALLPAPER_APP_VERSION" \
             --icon "wallpaper-source/public/favicon.svg" \
             --inject "wallpaper-source/public/pake-auth-navigation.js" \
             --width "${{ inputs.width }}" \
@@ -131,6 +137,7 @@ jobs:
 
           node dist/cli.js "${{ inputs.url }}" \
             --name "Wallpaper Gallery" \
+            --app-version "$WALLPAPER_APP_VERSION" \
             --icon "wallpaper-source/public/favicon.svg" \
             --inject "wallpaper-source/public/pake-auth-navigation.js" \
             --width "${{ inputs.width }}" \
@@ -156,6 +163,7 @@ jobs:
 
           node dist/cli.js "${{ inputs.url }}" `
             --name "Wallpaper Gallery" `
+            --app-version "$env:WALLPAPER_APP_VERSION" `
             --icon "wallpaper-source/public/favicon.svg" `
             --inject "wallpaper-source/public/pake-auth-navigation.js" `
             --width "${{ inputs.width }}" `

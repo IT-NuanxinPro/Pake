@@ -31,6 +31,10 @@ use app::{
         set_dock_badge_label, set_zoom, update_theme_mode, webview_navigate,
     },
     setup::{set_global_shortcut, set_system_tray},
+    wallpaper::{
+        wallpaper_apply, wallpaper_capabilities, wallpaper_configure_rotation, wallpaper_restore,
+        wallpaper_rotation_status,
+    },
     window::{
         open_additional_window_safe, reapply_window_icon, reveal_built_window, set_window,
         MultiWindowState,
@@ -301,12 +305,19 @@ pub fn run_app() {
             update_theme_mode,
             set_zoom,
             webview_navigate,
+            wallpaper_capabilities,
+            wallpaper_apply,
+            wallpaper_restore,
+            wallpaper_configure_rotation,
+            wallpaper_rotation_status,
         ])
         .setup(move |app| {
             app.manage(MultiWindowState::new(
                 pake_config.clone(),
                 tauri_config.clone(),
             ));
+
+            app::wallpaper::start(app.app_handle(), &pake_config)?;
 
             // --- Menu Construction Start ---
             #[cfg(target_os = "macos")]

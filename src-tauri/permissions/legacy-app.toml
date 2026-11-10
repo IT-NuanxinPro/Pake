@@ -1,0 +1,14 @@
+[[permission]]
+identifier = "allow-legacy-app-commands"
+description = "Preserves the existing generic Pake application command surface, excluding wallpaper."
+commands.allow = [
+  "download_file",
+  "send_notification",
+  "increment_dock_badge",
+  "set_dock_badge",
+  "set_dock_badge_label",
+  "clear_dock_badge",
+  "update_theme_mode",
+  "set_zoom",
+  "webview_navigate",
+]

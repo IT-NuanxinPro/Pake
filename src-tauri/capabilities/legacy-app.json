@@ -1,0 +1,9 @@
+{
+  "$schema": "../gen/schemas/desktop-schema.json",
+  "identifier": "pake-legacy-app-commands",
+  "description": "Preserves pre-ACL generic app commands for packaged pages without granting wallpaper commands.",
+  "local": true,
+  "webviews": ["*"],
+  "remote": { "urls": ["*://*"] },
+  "permissions": ["allow-legacy-app-commands"]
+}

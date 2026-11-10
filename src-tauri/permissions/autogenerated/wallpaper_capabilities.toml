@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-wallpaper-capabilities"
+description = "Enables the wallpaper_capabilities command without any pre-configured scope."
+commands.allow = ["wallpaper_capabilities"]
+
+[[permission]]
+identifier = "deny-wallpaper-capabilities"
+description = "Denies the wallpaper_capabilities command without any pre-configured scope."
+commands.deny = ["wallpaper_capabilities"]

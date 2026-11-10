@@ -182,6 +182,12 @@ jobs:
 
           Move-Item $msi.FullName "output/windows/Wallpaper-Gallery-Windows-x64.msi"
 
+      - name: Record installer version
+        shell: bash
+        run: |
+          mkdir -p output/metadata
+          printf '%s\n' "$WALLPAPER_APP_VERSION" > "output/metadata/version-${{ matrix.build }}.txt"
+
       - name: Upload build artifact
         uses: actions/upload-artifact@v6
         with:
@@ -213,6 +219,9 @@ jobs:
         run: |
           set -euo pipefail
 
+          APP_VERSION="$(node -e 'const fs = require("node:fs"); const versions = ["linux", "macos", "windows"].map(platform => fs.readFileSync("release/metadata/version-" + platform + ".txt", "utf8").trim()); if (new Set(versions).size !== 1 || !/^\d+\.\d+\.\d+$/.test(versions[0])) throw new Error("Installer versions do not match"); process.stdout.write(versions[0]);')"
+          export APP_VERSION
+
           if ! gh release view "$RELEASE_TAG" --repo "$SOURCE_REPOSITORY" >/dev/null 2>&1; then
             gh release create "$RELEASE_TAG" \
               --repo "$SOURCE_REPOSITORY" \
@@ -221,9 +230,16 @@ jobs:
               --notes "Wallpaper Gallery 桌面客户端稳定下载入口。客户端加载线上站点，网站内容更新无需重新安装；仅在桌面壳、图标或原生能力变化时重新构建。"
           fi
 
-          mapfile -t ASSETS < <(find release -type f -print | sort)
-          test "${#ASSETS[@]}" -gt 0 || { echo "No desktop assets found"; exit 1; }
+          mapfile -t ASSETS < <(find release -type f \( -name '*.msi' -o -name '*.dmg' -o -name '*.deb' -o -name '*.AppImage' \) -print | sort)
+          test "${#ASSETS[@]}" -eq 4 || { echo "Expected four desktop assets"; exit 1; }
+
+          gh release view "$RELEASE_TAG" --repo "$SOURCE_REPOSITORY" --json body --jq .body > desktop-notes.txt
+          node -e 'const fs = require("node:fs"); const body = fs.readFileSync("desktop-notes.txt", "utf8").replace(/<!-- wallpaper-desktop-version:[^>]* -->/g, "").trim(); fs.writeFileSync("desktop-notes.txt", body + "\n");'
+          gh release edit "$RELEASE_TAG" --repo "$SOURCE_REPOSITORY" --notes-file desktop-notes.txt
 
           gh release upload "$RELEASE_TAG" "${ASSETS[@]}" \
             --repo "$SOURCE_REPOSITORY" \
             --clobber
+
+          node -e 'const fs = require("node:fs"); fs.appendFileSync("desktop-notes.txt", "\n<!-- wallpaper-desktop-version:" + process.env.APP_VERSION + " -->\n");'
+          gh release edit "$RELEASE_TAG" --repo "$SOURCE_REPOSITORY" --notes-file desktop-notes.txt

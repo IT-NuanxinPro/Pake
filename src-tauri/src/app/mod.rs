@@ -6,4 +6,5 @@ pub mod invoke;
 pub mod menu;
 pub mod navigation;
 pub mod setup;
+pub mod wallpaper;
 pub mod window;

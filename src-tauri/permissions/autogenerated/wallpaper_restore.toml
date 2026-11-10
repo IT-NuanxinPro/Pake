@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-wallpaper-restore"
+description = "Enables the wallpaper_restore command without any pre-configured scope."
+commands.allow = ["wallpaper_restore"]
+
+[[permission]]
+identifier = "deny-wallpaper-restore"
+description = "Denies the wallpaper_restore command without any pre-configured scope."
+commands.deny = ["wallpaper_restore"]

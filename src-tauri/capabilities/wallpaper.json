@@ -1,0 +1,15 @@
+{
+  "$schema": "../gen/schemas/desktop-schema.json",
+  "identifier": "wallpaper-native",
+  "description": "Native wallpaper commands restricted to the official request origin.",
+  "local": false,
+  "webviews": ["pake", "pake-*"],
+  "remote": { "urls": ["https://wallpaper.061129.xyz"] },
+  "permissions": [
+    "allow-wallpaper-capabilities",
+    "allow-wallpaper-apply",
+    "allow-wallpaper-restore",
+    "allow-wallpaper-configure-rotation",
+    "allow-wallpaper-rotation-status"
+  ]
+}

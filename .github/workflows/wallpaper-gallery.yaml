@@ -243,3 +243,27 @@ jobs:
 
           node -e 'const fs = require("node:fs"); fs.appendFileSync("desktop-notes.txt", "\n<!-- wallpaper-desktop-version:" + process.env.APP_VERSION + " -->\n");'
           gh release edit "$RELEASE_TAG" --repo "$SOURCE_REPOSITORY" --notes-file desktop-notes.txt
+
+          # Publish a same-origin manifest after every installer is available.
+          gh release view "$RELEASE_TAG" --repo "$SOURCE_REPOSITORY" --json assets > uploaded-assets.json
+          gh api "repos/$SOURCE_REPOSITORY/contents/public/desktop-release.json?ref=$SOURCE_REF" > existing-manifest.json
+          node <<'NODE'
+          const fs = require('node:fs');
+          const existing = JSON.parse(fs.readFileSync('existing-manifest.json', 'utf8'));
+          const { assets } = JSON.parse(fs.readFileSync('uploaded-assets.json', 'utf8'));
+          const base = 'https://github.com/' + process.env.SOURCE_REPOSITORY + '/releases';
+          const names = { windows: 'Wallpaper-Gallery-Windows-x64.msi', macos: 'Wallpaper-Gallery-macOS-universal.dmg', linux: 'Wallpaper-Gallery-linux-x86_64.AppImage', deb: 'Wallpaper-Gallery-linux-x86_64.deb' };
+          const downloads = {};
+          let publishedAt = '';
+          for (const [platform, name] of Object.entries(names)) {
+            const asset = assets.find(item => item.name === name && item.state === 'uploaded' && item.size > 0);
+            if (!asset) throw new Error('Missing installer: ' + name);
+            downloads[platform] = base + '/download/' + process.env.RELEASE_TAG + '/' + name;
+            if (asset.updatedAt > publishedAt) publishedAt = asset.updatedAt;
+          }
+          const manifest = { available: true, version: process.env.APP_VERSION, publishedAt, releaseUrl: base + '/tag/' + process.env.RELEASE_TAG, notesUrl: base + '/tag/v' + process.env.APP_VERSION, downloads };
+          const content = Buffer.from(JSON.stringify(manifest, null, 2) + '\n').toString('base64');
+          fs.writeFileSync('manifest-payload.json', JSON.stringify({ message: 'chore: publish desktop update manifest', content, sha: existing.sha, branch: process.env.SOURCE_REF }));
+          NODE
+          gh api "repos/$SOURCE_REPOSITORY/contents/public/desktop-release.json" --method PUT --input manifest-payload.json
+          gh workflow run deploy.yml --repo "$SOURCE_REPOSITORY" --ref "$SOURCE_REF"

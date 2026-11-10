@@ -1,4 +1,5 @@
 use crate::app::config::PakeConfig;
+use crate::app::startup;
 use crate::util::{
     check_file_or_append, get_data_dir, get_download_message_with_lang, sanitize_download_filename,
     show_toast, MessageType,
@@ -242,6 +243,9 @@ pub fn open_additional_window_safe(app: &AppHandle) {
 /// Show a window that was built hidden once content is ready (or the fallback
 /// timer fires). No-ops when already visible so page-load and fallback can race.
 pub fn reveal_built_window(window: &WebviewWindow) {
+    if startup::enabled(window) && !startup::claim_local_reveal(window) {
+        return;
+    }
     if window.is_visible().unwrap_or(true) {
         return;
     }
@@ -266,6 +270,7 @@ pub fn any_app_window_visible(app: &AppHandle) -> bool {
 /// and the activation shortcut so secondary windows are not left on screen.
 pub fn hide_all_app_windows(app: &AppHandle) {
     for window in app.webview_windows().values() {
+        startup::cancel_reveal(window);
         let _ = window.hide();
     }
 }
@@ -274,6 +279,7 @@ pub fn hide_all_app_windows(app: &AppHandle) {
 pub fn show_all_app_windows(app: &AppHandle, init_fullscreen: bool) {
     let windows = app.webview_windows();
     for window in windows.values() {
+        startup::cancel_reveal(window);
         let _ = window.unminimize();
         let _ = window.show();
         reapply_window_icon(window);
@@ -380,6 +386,19 @@ fn build_window(
         ))
     })?;
 
+    let startup_target = startup::configured_target(
+        &window_config.url_type,
+        &window_config.url,
+        new_window_features.is_none(),
+    );
+    let url = if let Some(target) = &startup_target {
+        startup::register(app, label, target.clone())
+            .map_err(|error| tauri::Error::Io(std::io::Error::other(error)))?;
+        WebviewUrl::App(PathBuf::from(startup::ASSET_NAME))
+    } else {
+        url
+    };
+
     // On macOS both HTTP Basic auth and certificate bypass use the same
     // navigation-delegate proxy. Start on a neutral page so the proxy is in
     // place before the target can issue its first authentication challenge.
@@ -426,6 +445,15 @@ fn build_window(
         .user_agent(user_agent)
         .resizable(window_config.resizable)
         .maximized(window_config.maximize);
+
+    if let Some(target) = &startup_target {
+        window_builder = window_builder
+            .background_color(startup::background(window_config.dark_mode))
+            .initialization_script(&startup::initialization_script(
+                target,
+                window_config.dark_mode,
+            )?);
+    }
 
     #[cfg(target_os = "windows")]
     {
@@ -715,6 +743,10 @@ fn build_window(
 
     let window = window_builder.build()?;
 
+    if startup_target.is_some() {
+        startup::sync_background(&window);
+    }
+
     // A shared identifier alone leaves each NSWindow in automatic mode.
     // Prefer tabs only for Cmd+N clones so they join the main window's tab
     // group. The main window stays bar-less until another tab exists, while
@@ -749,13 +781,18 @@ fn build_window(
             .to_owned();
         let prompt_for_basic_auth = config.basic_auth;
         let allow_invalid_certificates = window_config.ignore_certificate_errors;
+        let navigation_target = if startup_target.is_some() {
+            startup::local_url().map_err(|error| tauri::Error::Io(std::io::Error::other(error)))?
+        } else {
+            target_url
+        };
         let auth_window = window.clone();
         Queue::main().exec_async(move || {
             if let Err(error) = auth_window.with_webview(move |webview| {
                 if !crate::app::auth::install_auth_delegate_and_navigate(
                     webview.inner(),
                     allowed_host,
-                    target_url.to_string(),
+                    navigation_target.to_string(),
                     prompt_for_basic_auth,
                     allow_invalid_certificates,
                 ) {

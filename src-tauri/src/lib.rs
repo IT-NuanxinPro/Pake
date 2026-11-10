@@ -31,9 +31,12 @@ use app::{
         set_dock_badge_label, set_zoom, update_theme_mode, webview_navigate,
     },
     setup::{set_global_shortcut, set_system_tray},
+    startup,
     wallpaper::{
-        wallpaper_apply, wallpaper_capabilities, wallpaper_configure_rotation, wallpaper_restore,
-        wallpaper_rotation_status,
+        wallpaper_apply, wallpaper_cache_apply, wallpaper_cache_clear_unused,
+        wallpaper_cache_delete, wallpaper_cache_list, wallpaper_cache_reveal,
+        wallpaper_cache_thumbnail, wallpaper_capabilities, wallpaper_configure_rotation,
+        wallpaper_restore, wallpaper_rotation_status, wallpaper_storage_choose,
     },
     window::{
         open_additional_window_safe, reapply_window_icon, reveal_built_window, set_window,
@@ -231,6 +234,7 @@ pub fn run_app() {
         .plugin(tauri_plugin_http::init())
         .plugin(tauri_plugin_shell::init())
         .plugin(tauri_plugin_notification::init())
+        .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_opener::init()); // Add this
 
     // Only add single instance plugin if multiple instances are not allowed
@@ -269,6 +273,23 @@ pub fn run_app() {
             }
 
             let label = webview.label();
+            if let Some(window) = webview.app_handle().get_webview_window(label) {
+                if startup::enabled(&window) {
+                    if startup::is_local_page(payload.url()) {
+                        if label == "pake" && !start_to_tray {
+                            reveal_startup_window(
+                                window.clone(),
+                                init_fullscreen,
+                                &page_load_revealed,
+                            );
+                        } else if label != "pake" {
+                            reveal_built_window(&window);
+                        }
+                        startup::start_local_page(&window);
+                    }
+                    return;
+                }
+            }
             if label == "pake" {
                 if start_to_tray {
                     return;
@@ -296,6 +317,7 @@ pub fn run_app() {
 
     app_builder
         .invoke_handler(tauri::generate_handler![
+            startup::wallpaper_startup,
             download_file,
             send_notification,
             increment_dock_badge,
@@ -310,8 +332,16 @@ pub fn run_app() {
             wallpaper_restore,
             wallpaper_configure_rotation,
             wallpaper_rotation_status,
+            wallpaper_cache_list,
+            wallpaper_cache_thumbnail,
+            wallpaper_cache_apply,
+            wallpaper_cache_reveal,
+            wallpaper_cache_delete,
+            wallpaper_cache_clear_unused,
+            wallpaper_storage_choose,
         ])
         .setup(move |app| {
+            app.manage(startup::StartupState::default());
             app.manage(MultiWindowState::new(
                 pake_config.clone(),
                 tauri_config.clone(),
@@ -350,7 +380,7 @@ pub fn run_app() {
             // Show window after state restoration to prevent position flashing
             // once its first page finishes. A fallback keeps offline or stalled
             // pages reachable without exposing a blank webview during normal startup.
-            if !start_to_tray {
+            if !start_to_tray && !startup::enabled(&window) {
                 let window_clone = window.clone();
                 tauri::async_runtime::spawn(async move {
                     tokio::time::sleep(tokio::time::Duration::from_millis(
@@ -367,6 +397,9 @@ pub fn run_app() {
             Ok(())
         })
         .on_window_event(move |_window, _event| {
+            if matches!(_event, tauri::WindowEvent::Destroyed) {
+                startup::forget_window(_window.app_handle(), _window.label());
+            }
             if let tauri::WindowEvent::CloseRequested { api, .. } = _event {
                 if hide_on_close && _window.label() == "pake" {
                     // User dismissed the window; do not let startup reveal reopen it.
@@ -400,7 +433,7 @@ pub fn run_app() {
                 // This lets tauri-plugin-window-state save the window position and size
             }
         })
-        .build(tauri::generate_context!())
+        .build(startup::with_assets(tauri::generate_context!()))
         .unwrap_or_else(|error| {
             eprintln!("[Pake] Fatal error while building Tauri application: {error}");
             std::process::exit(1);

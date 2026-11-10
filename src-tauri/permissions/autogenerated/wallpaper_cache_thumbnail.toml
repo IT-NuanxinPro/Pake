@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-wallpaper-cache-thumbnail"
+description = "Enables the wallpaper_cache_thumbnail command without any pre-configured scope."
+commands.allow = ["wallpaper_cache_thumbnail"]
+
+[[permission]]
+identifier = "deny-wallpaper-cache-thumbnail"
+description = "Denies the wallpaper_cache_thumbnail command without any pre-configured scope."
+commands.deny = ["wallpaper_cache_thumbnail"]

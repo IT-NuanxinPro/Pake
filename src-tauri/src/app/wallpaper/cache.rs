@@ -17,22 +17,52 @@ pub fn filename(item: &WallpaperItem) -> Result<String, String> {
     Ok(format!("{:x}.{extension}", hash.finalize()))
 }
 
-fn managed_name(name: &str) -> bool {
+pub fn managed_name(name: &str) -> bool {
     let Some((hash, ext)) = name.split_once('.') else {
         return false;
     };
     hash.len() == 64
-        && hash.bytes().all(|c| c.is_ascii_hexdigit())
+        && hash
+            .bytes()
+            .all(|c| c.is_ascii_digit() || (b'a'..=b'f').contains(&c))
         && matches!(ext, "jpg" | "jpeg" | "png")
 }
 
+pub fn validate_id(cache_id: &str) -> Result<(), String> {
+    if managed_name(cache_id) {
+        Ok(())
+    } else {
+        Err("本地壁纸编号无效".into())
+    }
+}
+
+pub fn ensure_root(root: &Path) -> Result<(), String> {
+    fs::create_dir_all(root).map_err(|e| format!("无法创建壁纸缓存：{e}"))?;
+    validate_root(root)
+}
+
+pub fn validate_root(root: &Path) -> Result<(), String> {
+    if !fs::symlink_metadata(root)
+        .map_err(|e| e.to_string())?
+        .is_dir()
+    {
+        return Err("壁纸缓存目录无效或为符号链接".into());
+    }
+    Ok(())
+}
+
+#[cfg(test)]
 pub fn clear_interrupted_writes(root: &Path) -> Result<(), String> {
     for entry in fs::read_dir(root).map_err(|e| e.to_string())? {
         let entry = entry.map_err(|e| e.to_string())?;
         let name = entry.file_name();
         let name = name.to_string_lossy();
         if let Some(stem) = name.strip_suffix(".pending") {
-            if stem == "state" || (stem.len() == 64 && stem.bytes().all(|c| c.is_ascii_hexdigit()))
+            if (stem == "state"
+                || (stem.len() == 64 && stem.bytes().all(|c| c.is_ascii_hexdigit())))
+                && fs::symlink_metadata(entry.path())
+                    .map_err(|e| e.to_string())?
+                    .is_file()
             {
                 fs::remove_file(entry.path())
                     .map_err(|e| format!("清理中断的缓存写入失败：{e}"))?;
@@ -66,6 +96,7 @@ fn validate_response(
 }
 
 pub fn entries(root: &Path) -> Result<Vec<(PathBuf, u64, SystemTime)>, String> {
+    validate_root(root)?;
     let mut entries = Vec::new();
     for entry in fs::read_dir(root).map_err(|e| format!("无法读取壁纸缓存：{e}"))? {
         let entry = entry.map_err(|e| e.to_string())?;
@@ -84,6 +115,7 @@ pub fn entries(root: &Path) -> Result<Vec<(PathBuf, u64, SystemTime)>, String> {
     Ok(entries)
 }
 
+#[cfg(test)]
 pub fn reserve(root: &Path, incoming: u64, protected: &[String]) -> Result<(), String> {
     let mut files = entries(root)?;
     let mut size: u64 = files.iter().map(|entry| entry.1).sum();
@@ -184,11 +216,7 @@ pub fn cached_path(root: &Path, item: &WallpaperItem) -> Result<Option<PathBuf>,
     Ok(Some(path))
 }
 
-pub async fn prepare(
-    root: PathBuf,
-    item: WallpaperItem,
-    protected: Vec<String>,
-) -> Result<PathBuf, String> {
+pub async fn prepare(root: PathBuf, item: WallpaperItem) -> Result<PathBuf, String> {
     let extension = policy::validate_item(&item)?;
     let check_root = root.clone();
     let check_item = item.clone();
@@ -234,7 +262,6 @@ pub async fn prepare(
         .map_err(|_| "图片下载超时")??;
     super::blocking(move || {
         let name = filename(&item)?;
-        reserve(&root, bytes.len() as u64, &protected)?;
         let path = root.join(name);
         atomic_write(&path, &bytes)?;
         Ok(path)
@@ -271,6 +298,17 @@ mod tests {
         .is_err());
         assert!(validate_response(200, None, "text/html", "jpg").is_err());
         assert!(validate_response(200, None, "image/jpeg", "jpg").is_ok());
+    }
+    #[test]
+    fn noncanonical_uppercase_ids_are_rejected_and_never_listed_or_cleared() {
+        let root = root();
+        let upper = format!("{}.png", "A".repeat(64));
+        fs::write(root.join(&upper), b"preserve noncanonical file").unwrap();
+        assert!(validate_id(&upper).is_err());
+        assert!(entries(&root).unwrap().is_empty());
+        reserve(&root, 0, &[]).unwrap();
+        assert!(root.join(&upper).exists());
+        fs::remove_dir_all(root).unwrap();
     }
     #[test]
     fn cleanup_discards_only_interrupted_managed_writes() {

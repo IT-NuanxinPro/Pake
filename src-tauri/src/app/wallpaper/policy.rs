@@ -3,6 +3,7 @@ use std::collections::HashSet;
 use tauri::Url;
 
 pub const MAX_IMAGE_BYTES: usize = 32 * 1024 * 1024;
+#[cfg(test)]
 pub const MAX_CACHE_BYTES: u64 = 256 * 1024 * 1024;
 
 pub fn validate_source(url: &Url) -> Result<(), String> {

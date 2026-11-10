@@ -1,11 +1,18 @@
 use tauri::{ipc::Origin, Url};
 
-const COMMANDS: [&str; 5] = [
+const COMMANDS: [&str; 12] = [
     "wallpaper_capabilities",
     "wallpaper_apply",
     "wallpaper_restore",
     "wallpaper_configure_rotation",
     "wallpaper_rotation_status",
+    "wallpaper_cache_list",
+    "wallpaper_cache_thumbnail",
+    "wallpaper_cache_apply",
+    "wallpaper_cache_reveal",
+    "wallpaper_cache_delete",
+    "wallpaper_cache_clear_unused",
+    "wallpaper_storage_choose",
 ];
 
 #[test]

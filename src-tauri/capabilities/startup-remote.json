@@ -1,0 +1,9 @@
+{
+  "$schema": "../gen/schemas/desktop-schema.json",
+  "identifier": "wallpaper-startup-remote",
+  "description": "Allows only the official wallpaper page to acknowledge its own launch state.",
+  "local": false,
+  "webviews": ["pake", "pake-*"],
+  "remote": { "urls": ["https://wallpaper.061129.xyz"] },
+  "permissions": ["allow-wallpaper-startup"]
+}

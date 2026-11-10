@@ -34,6 +34,8 @@ impl From<String> for ApplyFailure {
 
 #[derive(Clone, Debug)]
 pub enum Backend {
+    #[cfg(test)]
+    Test,
     #[cfg(target_os = "windows")]
     Windows,
     #[cfg(target_os = "macos")]
@@ -105,6 +107,14 @@ impl Backend {
 
     pub fn apply(&self, path: &Path) -> Result<(), ApplyFailure> {
         match self {
+            #[cfg(test)]
+            Self::Test => {
+                if path.is_file() {
+                    Ok(())
+                } else {
+                    Err("test image missing".to_string().into())
+                }
+            }
             #[cfg(target_os = "windows")]
             Self::Windows => {
                 use std::os::windows::ffi::OsStrExt;

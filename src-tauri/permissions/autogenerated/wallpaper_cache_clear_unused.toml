@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-wallpaper-cache-clear-unused"
+description = "Enables the wallpaper_cache_clear_unused command without any pre-configured scope."
+commands.allow = ["wallpaper_cache_clear_unused"]
+
+[[permission]]
+identifier = "deny-wallpaper-cache-clear-unused"
+description = "Denies the wallpaper_cache_clear_unused command without any pre-configured scope."
+commands.deny = ["wallpaper_cache_clear_unused"]

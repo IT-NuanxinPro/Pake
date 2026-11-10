@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-wallpaper-storage-choose"
+description = "Enables the wallpaper_storage_choose command without any pre-configured scope."
+commands.allow = ["wallpaper_storage_choose"]
+
+[[permission]]
+identifier = "deny-wallpaper-storage-choose"
+description = "Denies the wallpaper_storage_choose command without any pre-configured scope."
+commands.deny = ["wallpaper_storage_choose"]

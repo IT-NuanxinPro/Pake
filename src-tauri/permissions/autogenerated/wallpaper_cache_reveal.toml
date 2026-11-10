@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-wallpaper-cache-reveal"
+description = "Enables the wallpaper_cache_reveal command without any pre-configured scope."
+commands.allow = ["wallpaper_cache_reveal"]
+
+[[permission]]
+identifier = "deny-wallpaper-cache-reveal"
+description = "Denies the wallpaper_cache_reveal command without any pre-configured scope."
+commands.deny = ["wallpaper_cache_reveal"]

@@ -229,6 +229,9 @@ pub async fn update_theme_mode(app: AppHandle, mode: String) -> Result<(), Strin
     };
     for window in app.webview_windows().values() {
         window.set_theme(theme).map_err(|error| error.to_string())?;
+        if crate::app::startup::enabled(window) {
+            crate::app::startup::sync_background(window);
+        }
     }
     Ok(())
 }

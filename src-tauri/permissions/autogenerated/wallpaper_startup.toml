@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-wallpaper-startup"
+description = "Enables the wallpaper_startup command without any pre-configured scope."
+commands.allow = ["wallpaper_startup"]
+
+[[permission]]
+identifier = "deny-wallpaper-startup"
+description = "Denies the wallpaper_startup command without any pre-configured scope."
+commands.deny = ["wallpaper_startup"]

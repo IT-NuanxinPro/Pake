@@ -1,7 +1,9 @@
 mod cache;
+mod library;
 mod platform;
 mod policy;
 mod service;
+mod storage;
 
 use serde::{Deserialize, Serialize};
 use service::Service;
@@ -44,6 +46,8 @@ pub struct Capabilities {
     app_version: String,
     supported_formats: Vec<&'static str>,
     supports_bing: bool,
+    cache_management_version: u8,
+    storage_management_version: u8,
 }
 
 #[derive(Serialize)]
@@ -88,6 +92,8 @@ pub async fn wallpaper_capabilities(window: WebviewWindow) -> Result<Capabilitie
         app_version: window.app_handle().package_info().version.to_string(),
         supported_formats: vec!["jpg", "jpeg", "png"],
         supports_bing: false,
+        cache_management_version: 1,
+        storage_management_version: 1,
     })
 }
 
@@ -118,6 +124,81 @@ pub async fn wallpaper_rotation_status(window: WebviewWindow) -> Result<Rotation
     authorized_service(&window)?.status().await
 }
 
+#[tauri::command]
+pub async fn wallpaper_cache_list(window: WebviewWindow) -> Result<library::CacheSnapshot, String> {
+    authorized_service(&window)?.cache_list().await
+}
+
+#[tauri::command]
+pub async fn wallpaper_cache_thumbnail(
+    window: WebviewWindow,
+    cache_id: String,
+) -> Result<tauri::ipc::Response, String> {
+    authorized_service(&window)?
+        .cache_thumbnail(cache_id)
+        .await
+        .map(tauri::ipc::Response::new)
+}
+
+#[tauri::command]
+pub async fn wallpaper_cache_apply(
+    window: WebviewWindow,
+    cache_id: String,
+) -> Result<library::CacheSnapshot, String> {
+    authorized_service(&window)?.cache_apply(cache_id).await
+}
+
+#[tauri::command]
+pub async fn wallpaper_cache_reveal(
+    window: WebviewWindow,
+    cache_id: Option<String>,
+) -> Result<(), String> {
+    authorized_service(&window)?.cache_reveal(cache_id).await
+}
+
+#[tauri::command]
+pub async fn wallpaper_cache_delete(
+    window: WebviewWindow,
+    cache_id: String,
+) -> Result<library::CacheSnapshot, String> {
+    authorized_service(&window)?.cache_delete(cache_id).await
+}
+
+#[tauri::command]
+pub async fn wallpaper_cache_clear_unused(
+    window: WebviewWindow,
+) -> Result<library::ClearUnusedResult, String> {
+    authorized_service(&window)?.cache_clear_unused().await
+}
+
+#[tauri::command]
+pub async fn wallpaper_storage_choose(
+    window: WebviewWindow,
+) -> Result<library::StorageChoice, String> {
+    use tauri_plugin_dialog::DialogExt;
+    let service = authorized_service(&window)?;
+    let (sender, receiver) = tokio::sync::oneshot::channel();
+    window
+        .dialog()
+        .file()
+        .set_parent(&window)
+        .set_title("选择保存位置（将在其下创建 Wallpaper Gallery 文件夹）")
+        .pick_folder(move |folder| {
+            let result = folder
+                .map(|folder| {
+                    folder
+                        .into_path()
+                        .map_err(|e| format!("无法读取所选文件夹：{e}"))
+                })
+                .transpose();
+            if sender.send(result).is_err() {
+                eprintln!("[Pake] Wallpaper directory selection response was dropped");
+            }
+        });
+    let parent = receiver.await.map_err(|_| "文件夹选择任务中断")??;
+    service.choose_storage(parent).await
+}
+
 pub fn start(app: &AppHandle, config: &super::config::PakeConfig) -> Result<(), String> {
     // The runtime app config, not the generic package name, owns this feature.
     let is_gallery = config
@@ -133,7 +214,17 @@ pub fn start(app: &AppHandle, config: &super::config::PakeConfig) -> Result<(), 
         .app_cache_dir()
         .map_err(|e| e.to_string())?
         .join("wallpaper-v1");
-    let service = Arc::new(Service::new(root));
+    let metadata = app
+        .path()
+        .app_data_dir()
+        .map_err(|e| e.to_string())?
+        .join("wallpaper-v1");
+    let storage = storage::Storage::new(
+        root,
+        metadata,
+        app.path().picture_dir().map_err(|e| e.to_string()),
+    );
+    let service = Arc::new(Service::new(storage));
     app.manage(service.clone());
     tauri::async_runtime::spawn(async move {
         loop {
@@ -163,6 +254,8 @@ mod capability_contract_tests {
             app_version: "5.2.0".into(),
             supported_formats: vec!["jpg", "jpeg", "png"],
             supports_bing: false,
+            cache_management_version: 1,
+            storage_management_version: 1,
         })
         .unwrap();
         assert_eq!(value["appVersion"], "5.2.0");
@@ -171,6 +264,8 @@ mod capability_contract_tests {
             serde_json::json!(["jpg", "jpeg", "png"])
         );
         assert_eq!(value["supportsBing"], false);
+        assert_eq!(value["cacheManagementVersion"], 1);
+        assert_eq!(value["storageManagementVersion"], 1);
         assert!(value.get("app_version").is_none());
     }
 }

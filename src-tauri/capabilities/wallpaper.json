@@ -10,6 +10,13 @@
     "allow-wallpaper-apply",
     "allow-wallpaper-restore",
     "allow-wallpaper-configure-rotation",
-    "allow-wallpaper-rotation-status"
+    "allow-wallpaper-rotation-status",
+    "allow-wallpaper-cache-list",
+    "allow-wallpaper-cache-thumbnail",
+    "allow-wallpaper-cache-apply",
+    "allow-wallpaper-cache-reveal",
+    "allow-wallpaper-cache-delete",
+    "allow-wallpaper-cache-clear-unused",
+    "allow-wallpaper-storage-choose"
   ]
 }

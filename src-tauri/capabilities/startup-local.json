@@ -1,0 +1,8 @@
+{
+  "$schema": "../gen/schemas/desktop-schema.json",
+  "identifier": "wallpaper-startup-local",
+  "description": "Allows the built-in launch page to connect only its native-configured official home.",
+  "local": true,
+  "webviews": ["pake", "pake-*"],
+  "permissions": ["allow-wallpaper-startup"]
+}
